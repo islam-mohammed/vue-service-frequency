@@ -36,8 +36,10 @@ const customDays = ref<CustomDays>({
 });
 const specifyTimeWindows = ref(false);
 const timeWindows = ref('');
+const timeWindowError = ref('');
 const setExactTime = ref(false);
 const exactTime = ref('');
+const exactTimeError = ref('');
 
 const frequencyOptions = [
   { value: 'Weekly', label: 'Weekly' },
@@ -130,12 +132,50 @@ watch(() => props.scheduleConfig, (newConfig) => {
 watch(specifyTimeWindows, (newValue) => {
   if (!newValue) {
     timeWindows.value = '';
+    timeWindowError.value = '';
   }
 });
 
 watch(setExactTime, (newValue) => {
   if (!newValue) {
     exactTime.value = '';
+    exactTimeError.value = '';
+  }
+});
+
+watch(timeWindows, (newValue) => {
+  timeWindowError.value = '';
+  if (!newValue) return;
+
+  const ranges = newValue.split(',').map(r => r.trim());
+  const timeRangeRegex = /^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/;
+
+  for (const range of ranges) {
+    if (!range) continue;
+    const match = range.match(timeRangeRegex);
+    if (!match) {
+      timeWindowError.value = 'Invalid format. Use HH:mm-HH:mm, separated by commas.';
+      return;
+    }
+
+    const [, startH, startM, endH, endM] = match;
+    const startTime = parseInt(startH, 10) * 60 + parseInt(startM, 10);
+    const endTime = parseInt(endH, 10) * 60 + parseInt(endM, 10);
+
+    if (startTime >= endTime) {
+      timeWindowError.value = `End time must be after start time for range "${range}".`;
+      return;
+    }
+  }
+});
+
+watch(exactTime, (newValue) => {
+  exactTimeError.value = '';
+  if (!newValue) return;
+
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  if (!timeRegex.test(newValue)) {
+    exactTimeError.value = 'Invalid format. Use HH:mm.';
   }
 });
 </script>
@@ -167,26 +207,36 @@ watch(setExactTime, (newValue) => {
           </div>
 
           <!-- Time Window -->
-          <div class="flex items-center space-x-2">
-            <Checkbox id="specifyTimeWindows" v-model="specifyTimeWindows" />
-            <Label for="specifyTimeWindows">Specify time window(s)</Label>
+          <div class="space-y-2">
+            <div class="flex items-center space-x-2">
+              <Checkbox id="specifyTimeWindows" v-model="specifyTimeWindows" />
+              <Label for="specifyTimeWindows">Specify time window(s)</Label>
+            </div>
+            <div v-if="specifyTimeWindows">
+              <Input
+                v-model="timeWindows"
+                placeholder="e.g. 06:30-07:30, 15:00-17:00"
+                :class="{ 'border-red-500': timeWindowError }"
+              />
+              <p v-if="timeWindowError" class="text-red-500 text-sm mt-1">{{ timeWindowError }}</p>
+            </div>
           </div>
-          <Input
-            v-if="specifyTimeWindows"
-            v-model="timeWindows"
-            placeholder="e.g. 06:30-07:30, 15:00-17:00"
-          />
 
           <!-- Exact Time -->
-          <div class="flex items-center space-x-2">
-            <Checkbox id="setExactTime" v-model="setExactTime" />
-            <Label for="setExactTime">Set exact time</Label>
+          <div class="space-y-2">
+            <div class="flex items-center space-x-2">
+              <Checkbox id="setExactTime" v-model="setExactTime" />
+              <Label for="setExactTime">Set exact time</Label>
+            </div>
+            <div v-if="setExactTime">
+              <Input
+                v-model="exactTime"
+                placeholder="e.g. 13:30"
+                :class="{ 'border-red-500': exactTimeError }"
+              />
+              <p v-if="exactTimeError" class="text-red-500 text-sm mt-1">{{ exactTimeError }}</p>
+            </div>
           </div>
-          <Input
-            v-if="setExactTime"
-            v-model="exactTime"
-            placeholder="e.g. 13:30"
-          />
         </div>
       </CardContent>
     </Card>
