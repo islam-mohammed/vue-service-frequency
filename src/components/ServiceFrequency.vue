@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, computed } from 'vue';
+import { toRef } from 'vue';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -7,16 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-vue-next';
-
-interface CustomDays {
-  monday: boolean;
-  tuesday: boolean;
-  wednesday: boolean;
-  thursday: boolean;
-  friday: boolean;
-  saturday: boolean;
-  sunday: boolean;
-}
+import { useServiceFrequency } from '@/composables/useServiceFrequency';
 
 const props = defineProps({
   scheduleConfig: {
@@ -25,188 +16,20 @@ const props = defineProps({
   },
 });
 
-const frequency = ref('Fortnightly');
-
-const customDays = ref<CustomDays>({
-  monday: false,
-  tuesday: false,
-  wednesday: false,
-  thursday: false,
-  friday: false,
-  saturday: false,
-  sunday: false,
-});
-const specifyTimeWindows = ref(false);
-const timeWindows = ref<{ start: string, end: string }[]>([]);
-const timeWindowError = ref<string[]>([]);
-const setExactTime = ref(false);
-const exactTime = ref('');
-const exactTimeError = ref('');
-
-const frequencyOptions = [
-  { value: 'Weekly', label: 'Weekly' },
-  { value: 'Fortnightly', label: 'Fortnightly' },
-  { value: 'Every 4 weeks', label: 'Every 4 weeks' },
-  { value: 'None', label: 'None' },
-  { value: 'Custom', label: 'Custom' },
-];
-
-const scheduleOutput = computed(() => {
-  const output: {
-    frequency: string;
-    days?: string[];
-    timeWindows?: string;
-    exactTime?: string;
-  } = {
-    frequency: frequency.value,
-  };
-
-  if (frequency.value === 'Custom') {
-    output.days = Object.entries(customDays.value)
-      .filter(([, selected]) => selected)
-      .map(([day]) => day);
-
-    if (timeWindows.value.length > 0) {
-      output.timeWindows = timeWindows.value
-        .map(range => `${range.start}-${range.end}`)
-        .join(',');
-    }
-
-    if (exactTime.value) {
-      output.exactTime = exactTime.value;
-    }
-  }
-
-  return JSON.stringify(output, null, 2);
-});
-
-function addTimeRange() {
-  timeWindows.value.push({ start: '', end: '' });
-}
-
-function removeTimeRange(index: number) {
-  timeWindows.value.splice(index, 1);
-  timeWindowError.value.splice(index, 1);
-}
-
-function updateStateFromConfig(configString: string | undefined) {
-  if (!configString) {
-    frequency.value = 'Fortnightly';
-    Object.keys(customDays.value).forEach(day => {
-      customDays.value[day as keyof CustomDays] = false;
-    });
-    specifyTimeWindows.value = false;
-    timeWindows.value = [];
-    setExactTime.value = false;
-    exactTime.value = '';
-    return;
-  }
-
-  try {
-    const config = JSON.parse(configString);
-    frequency.value = config.frequency || 'Fortnightly';
-
-    if (config.frequency === 'Custom') {
-      const days = config.days || [];
-      Object.keys(customDays.value).forEach(day => {
-        customDays.value[day as keyof CustomDays] = days.includes(day);
-      });
-
-      if (config.timeWindows) {
-        specifyTimeWindows.value = true;
-        timeWindows.value = config.timeWindows.split(',').map((rangeStr: string) => {
-          const [start, end] = rangeStr.trim().split('-');
-          return { start: start || '', end: end || '' };
-        });
-      } else {
-        specifyTimeWindows.value = false;
-        timeWindows.value = [];
-      }
-
-      if (config.exactTime) {
-        setExactTime.value = true;
-        exactTime.value = config.exactTime;
-      } else {
-        setExactTime.value = false;
-        exactTime.value = '';
-      }
-    }
-  } catch (error) {
-    console.error("Failed to parse scheduleConfig prop:", error);
-    frequency.value = 'Fortnightly';
-  }
-}
-
-onMounted(() => {
-  updateStateFromConfig(props.scheduleConfig);
-});
-
-watch(() => props.scheduleConfig, (newConfig) => {
-  updateStateFromConfig(newConfig);
-});
-
-watch(specifyTimeWindows, (newValue) => {
-  if (newValue) {
-    setExactTime.value = false;
-  }
-  if (!newValue) {
-    timeWindows.value = [];
-    timeWindowError.value = [];
-  }
-});
-
-watch(setExactTime, (newValue) => {
-  if (newValue) {
-    specifyTimeWindows.value = false;
-  }
-  if (!newValue) {
-    exactTime.value = '';
-    exactTimeError.value = '';
-  }
-});
-
-watch(timeWindows, (newValue) => {
-  const newErrors: string[] = [];
-  if (!newValue) {
-    timeWindowError.value = newErrors;
-    return;
-  }
-
-  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-  newValue.forEach((range, index) => {
-    newErrors[index] = ''; // Default to no error
-    if (!range.start && !range.end) return;
-
-    const startMatch = timeRegex.test(range.start);
-    const endMatch = timeRegex.test(range.end);
-
-    if (!startMatch || !endMatch) {
-      newErrors[index] = 'Invalid format. Use HH:mm.';
-      return;
-    }
-
-    const startTime = parseInt(range.start.split(':')[0], 10) * 60 + parseInt(range.start.split(':')[1], 10);
-    const endTime = parseInt(range.end.split(':')[0], 10) * 60 + parseInt(range.end.split(':')[1], 10);
-
-    if (startTime >= endTime) {
-      newErrors[index] = 'End time must be after start time.';
-      return;
-    }
-  });
-  timeWindowError.value = newErrors;
-}, { deep: true });
-
-
-watch(exactTime, (newValue) => {
-  exactTimeError.value = '';
-  if (!newValue) return;
-
-  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-  if (!timeRegex.test(newValue)) {
-    exactTimeError.value = 'Invalid format. Use HH:mm.';
-  }
-});
+const {
+  frequency,
+  customDays,
+  specifyTimeWindows,
+  timeWindows,
+  timeWindowError,
+  setExactTime,
+  exactTime,
+  exactTimeError,
+  frequencyOptions,
+  scheduleOutput,
+  addTimeRange,
+  removeTimeRange,
+} = useServiceFrequency(toRef(props, 'scheduleConfig'));
 </script>
 
 <template>
@@ -230,7 +53,7 @@ watch(exactTime, (newValue) => {
           <!-- Day Checkboxes -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div v-for="(value, day) in customDays" :key="day" class="flex items-center space-x-2">
-              <Checkbox :id="day" v-model="customDays[day as keyof CustomDays]" />
+              <Checkbox :id="day" v-model="customDays[day as keyof typeof customDays]" />
               <Label :for="day" class="capitalize">{{ day }}</Label>
             </div>
           </div>
@@ -244,9 +67,9 @@ watch(exactTime, (newValue) => {
             <div v-if="specifyTimeWindows" class="space-y-4">
               <div v-for="(range, index) in timeWindows" :key="index" class="space-y-1">
                 <div class="flex items-center gap-2">
-                  <Input v-model="range.start" placeholder="HH:mm" :class="{ 'border-red-500': timeWindowError[index] }" />
+                  <Input v-model="range.start" type="time" placeholder="HH:mm" :class="{ 'border-red-500': timeWindowError[index] }" />
                   <span>-</span>
-                  <Input v-model="range.end" placeholder="HH:mm" :class="{ 'border-red-500': timeWindowError[index] }" />
+                  <Input v-model="range.end" type="time" placeholder="HH:mm" :class="{ 'border-red-500': timeWindowError[index] }" />
                   <Button variant="ghost" size="icon" @click="removeTimeRange(index)">
                     <X class="h-4 w-4" />
                   </Button>
@@ -266,6 +89,7 @@ watch(exactTime, (newValue) => {
             <div v-if="setExactTime">
               <Input
                 v-model="exactTime"
+                type="time"
                 placeholder="e.g. 13:30"
                 :class="{ 'border-red-500': exactTimeError }"
               />
