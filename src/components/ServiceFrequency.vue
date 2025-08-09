@@ -18,6 +18,7 @@ const props = defineProps({
 
 const {
   frequency,
+  customDayError,
   customDays,
   specifyTimeWindows,
   timeWindows,
@@ -49,6 +50,7 @@ const {
         <!-- Custom Frequency Section -->
         <div v-if="frequency === 'Custom'" class="grid gap-4 mt-4 pt-4 border-t">
           <h3 class="font-semibold">Custom Schedule</h3>
+          <p v-if="customDayError" class="text-red-500 text-sm -mt-2 mb-2">{{ customDayError }}</p>
 
           <!-- Day Checkboxes -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">

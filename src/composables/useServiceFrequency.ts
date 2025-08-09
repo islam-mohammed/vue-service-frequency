@@ -29,6 +29,7 @@ export function useServiceFrequency(scheduleConfig: MaybeRef<string | undefined>
   const setExactTime = ref(false);
   const exactTime = ref('');
   const exactTimeError = ref('');
+  const customDayError = ref('');
 
   const frequencyOptions = [
     { value: 'Weekly', label: 'Weekly' },
@@ -159,19 +160,9 @@ export function useServiceFrequency(scheduleConfig: MaybeRef<string | undefined>
       return;
     }
 
-    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
     newValue.forEach((range, index) => {
       newErrors[index] = ''; // Default to no error
-      if (!range.start && !range.end) return;
-
-      const startMatch = timeRegex.test(range.start);
-      const endMatch = timeRegex.test(range.end);
-
-      if (!startMatch || !endMatch) {
-        newErrors[index] = 'Invalid format. Use HH:mm.';
-        return;
-      }
+      if (!range.start || !range.end) return;
 
       const startTime = parseInt(range.start.split(':')[0], 10) * 60 + parseInt(range.start.split(':')[1], 10);
       const endTime = parseInt(range.end.split(':')[0], 10) * 60 + parseInt(range.end.split(':')[1], 10);
@@ -184,19 +175,18 @@ export function useServiceFrequency(scheduleConfig: MaybeRef<string | undefined>
     timeWindowError.value = newErrors;
   }, { deep: true });
 
-
-  watch(exactTime, (newValue) => {
-    exactTimeError.value = '';
-    if (!newValue) return;
-
-    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-    if (!timeRegex.test(newValue)) {
-      exactTimeError.value = 'Invalid format. Use HH:mm.';
+  watch([frequency, customDays], () => {
+    if (frequency.value === 'Custom') {
+      const isAnyDaySelected = Object.values(customDays.value).some(day => day);
+      customDayError.value = isAnyDaySelected ? '' : 'Please select at least one day for a custom schedule.';
+    } else {
+      customDayError.value = '';
     }
-  });
+  }, { deep: true });
 
   return {
     frequency,
+    customDayError,
     customDays,
     specifyTimeWindows,
     timeWindows,
