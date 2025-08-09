@@ -184,9 +184,21 @@ export function useServiceFrequency(scheduleConfig: MaybeRef<string | undefined>
     }
   }, { deep: true });
 
+  const isAddButtonDisabled = computed(() => {
+    if (timeWindows.value.length === 0) {
+      return false;
+    }
+    const lastIndex = timeWindows.value.length - 1;
+    const lastRange = timeWindows.value[lastIndex];
+    const lastError = timeWindowError.value[lastIndex];
+
+    return !lastRange.start || !lastRange.end || !!lastError;
+  });
+
   return {
     frequency,
     customDayError,
+    isAddButtonDisabled,
     customDays,
     specifyTimeWindows,
     timeWindows,

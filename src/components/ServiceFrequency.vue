@@ -19,6 +19,7 @@ const props = defineProps({
 const {
   frequency,
   customDayError,
+  isAddButtonDisabled,
   customDays,
   specifyTimeWindows,
   timeWindows,
@@ -78,7 +79,7 @@ const {
                 </div>
                 <p v-if="timeWindowError[index]" class="text-red-500 text-sm">{{ timeWindowError[index] }}</p>
               </div>
-              <Button variant="outline" @click="addTimeRange">Add time range</Button>
+              <Button variant="outline" @click="addTimeRange" :disabled="isAddButtonDisabled">Add time range</Button>
             </div>
           </div>
 
