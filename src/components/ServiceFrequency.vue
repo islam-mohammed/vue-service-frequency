@@ -5,6 +5,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { X } from 'lucide-vue-next';
 
 interface CustomDays {
   monday: boolean;
@@ -35,8 +37,8 @@ const customDays = ref<CustomDays>({
   sunday: false,
 });
 const specifyTimeWindows = ref(false);
-const timeWindows = ref('');
-const timeWindowError = ref('');
+const timeWindows = ref<{ start: string, end: string }[]>([]);
+const timeWindowError = ref<string[]>([]);
 const setExactTime = ref(false);
 const exactTime = ref('');
 const exactTimeError = ref('');
@@ -64,8 +66,10 @@ const scheduleOutput = computed(() => {
       .filter(([, selected]) => selected)
       .map(([day]) => day);
 
-    if (timeWindows.value) {
-      output.timeWindows = timeWindows.value;
+    if (timeWindows.value.length > 0) {
+      output.timeWindows = timeWindows.value
+        .map(range => `${range.start}-${range.end}`)
+        .join(',');
     }
 
     if (exactTime.value) {
@@ -76,6 +80,15 @@ const scheduleOutput = computed(() => {
   return JSON.stringify(output, null, 2);
 });
 
+function addTimeRange() {
+  timeWindows.value.push({ start: '', end: '' });
+}
+
+function removeTimeRange(index: number) {
+  timeWindows.value.splice(index, 1);
+  timeWindowError.value.splice(index, 1);
+}
+
 function updateStateFromConfig(configString: string | undefined) {
   if (!configString) {
     frequency.value = 'Fortnightly';
@@ -83,7 +96,7 @@ function updateStateFromConfig(configString: string | undefined) {
       customDays.value[day as keyof CustomDays] = false;
     });
     specifyTimeWindows.value = false;
-    timeWindows.value = '';
+    timeWindows.value = [];
     setExactTime.value = false;
     exactTime.value = '';
     return;
@@ -101,10 +114,13 @@ function updateStateFromConfig(configString: string | undefined) {
 
       if (config.timeWindows) {
         specifyTimeWindows.value = true;
-        timeWindows.value = config.timeWindows;
+        timeWindows.value = config.timeWindows.split(',').map((rangeStr: string) => {
+          const [start, end] = rangeStr.trim().split('-');
+          return { start: start || '', end: end || '' };
+        });
       } else {
         specifyTimeWindows.value = false;
-        timeWindows.value = '';
+        timeWindows.value = [];
       }
 
       if (config.exactTime) {
@@ -131,8 +147,8 @@ watch(() => props.scheduleConfig, (newConfig) => {
 
 watch(specifyTimeWindows, (newValue) => {
   if (!newValue) {
-    timeWindows.value = '';
-    timeWindowError.value = '';
+    timeWindows.value = [];
+    timeWindowError.value = [];
   }
 });
 
@@ -144,30 +160,37 @@ watch(setExactTime, (newValue) => {
 });
 
 watch(timeWindows, (newValue) => {
-  timeWindowError.value = '';
-  if (!newValue) return;
+  const newErrors: string[] = [];
+  if (!newValue) {
+    timeWindowError.value = newErrors;
+    return;
+  }
 
-  const ranges = newValue.split(',').map(r => r.trim());
-  const timeRangeRegex = /^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/;
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-  for (const range of ranges) {
-    if (!range) continue;
-    const match = range.match(timeRangeRegex);
-    if (!match) {
-      timeWindowError.value = 'Invalid format. Use HH:mm-HH:mm, separated by commas.';
+  newValue.forEach((range, index) => {
+    newErrors[index] = ''; // Default to no error
+    if (!range.start && !range.end) return;
+
+    const startMatch = timeRegex.test(range.start);
+    const endMatch = timeRegex.test(range.end);
+
+    if (!startMatch || !endMatch) {
+      newErrors[index] = 'Invalid format. Use HH:mm.';
       return;
     }
 
-    const [, startH, startM, endH, endM] = match;
-    const startTime = parseInt(startH, 10) * 60 + parseInt(startM, 10);
-    const endTime = parseInt(endH, 10) * 60 + parseInt(endM, 10);
+    const startTime = parseInt(range.start.split(':')[0], 10) * 60 + parseInt(range.start.split(':')[1], 10);
+    const endTime = parseInt(range.end.split(':')[0], 10) * 60 + parseInt(range.end.split(':')[1], 10);
 
     if (startTime >= endTime) {
-      timeWindowError.value = `End time must be after start time for range "${range}".`;
+      newErrors[index] = 'End time must be after start time.';
       return;
     }
-  }
-});
+  });
+  timeWindowError.value = newErrors;
+}, { deep: true });
+
 
 watch(exactTime, (newValue) => {
   exactTimeError.value = '';
@@ -212,13 +235,19 @@ watch(exactTime, (newValue) => {
               <Checkbox id="specifyTimeWindows" v-model="specifyTimeWindows" />
               <Label for="specifyTimeWindows">Specify time window(s)</Label>
             </div>
-            <div v-if="specifyTimeWindows">
-              <Input
-                v-model="timeWindows"
-                placeholder="e.g. 06:30-07:30, 15:00-17:00"
-                :class="{ 'border-red-500': timeWindowError }"
-              />
-              <p v-if="timeWindowError" class="text-red-500 text-sm mt-1">{{ timeWindowError }}</p>
+            <div v-if="specifyTimeWindows" class="space-y-4">
+              <div v-for="(range, index) in timeWindows" :key="index" class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <Input v-model="range.start" placeholder="HH:mm" :class="{ 'border-red-500': timeWindowError[index] }" />
+                  <span>-</span>
+                  <Input v-model="range.end" placeholder="HH:mm" :class="{ 'border-red-500': timeWindowError[index] }" />
+                  <Button variant="ghost" size="icon" @click="removeTimeRange(index)">
+                    <X class="h-4 w-4" />
+                  </Button>
+                </div>
+                <p v-if="timeWindowError[index]" class="text-red-500 text-sm">{{ timeWindowError[index] }}</p>
+              </div>
+              <Button variant="outline" @click="addTimeRange">Add time range</Button>
             </div>
           </div>
 
