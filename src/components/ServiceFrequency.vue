@@ -146,6 +146,9 @@ watch(() => props.scheduleConfig, (newConfig) => {
 });
 
 watch(specifyTimeWindows, (newValue) => {
+  if (newValue) {
+    setExactTime.value = false;
+  }
   if (!newValue) {
     timeWindows.value = [];
     timeWindowError.value = [];
@@ -153,6 +156,9 @@ watch(specifyTimeWindows, (newValue) => {
 });
 
 watch(setExactTime, (newValue) => {
+  if (newValue) {
+    specifyTimeWindows.value = false;
+  }
   if (!newValue) {
     exactTime.value = '';
     exactTimeError.value = '';
